@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/casdoor/casdoor/util"
@@ -75,16 +76,29 @@ type DingtalkAccessTokenResp struct {
 }
 
 type DingtalkUser struct {
-	UserId     string  `json:"userid"`
-	UnionId    string  `json:"unionid"`
-	Name       string  `json:"name"`
-	Department []int64 `json:"dept_id_list"`
-	Position   string  `json:"title"`
-	Mobile     string  `json:"mobile"`
-	Email      string  `json:"email"`
-	Avatar     string  `json:"avatar"`
-	JobNumber  string  `json:"job_number"`
-	Active     bool    `json:"active"`
+	UserId     string          `json:"userid"`
+	UnionId    string          `json:"unionid"`
+	Name       string          `json:"name"`
+	Department []int64         `json:"dept_id_list"`
+	Position   string          `json:"title"`
+	Mobile     string          `json:"mobile"`
+	Email      string          `json:"email"`
+	OrgEmail   string          `json:"org_email"`
+	Avatar     string          `json:"avatar"`
+	JobNumber  string          `json:"job_number"`
+	Active     bool            `json:"active"`
+	Raw        json.RawMessage `json:"-"`
+}
+
+func (user *DingtalkUser) UnmarshalJSON(data []byte) error {
+	type dingtalkUserAlias DingtalkUser
+	var decoded dingtalkUserAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*user = DingtalkUser(decoded)
+	user.Raw = append(user.Raw[:0], data...)
+	return nil
 }
 
 type DingtalkUserListResp struct {
@@ -110,11 +124,23 @@ type DingtalkDeptListResp struct {
 }
 
 type DingtalkDepartment struct {
-	DeptId          int64  `json:"dept_id"`
-	Name            string `json:"name"`
-	ParentId        int64  `json:"parent_id"`
-	CreateDeptGroup bool   `json:"create_dept_group"`
-	AutoAddUser     bool   `json:"auto_add_user"`
+	DeptId          int64           `json:"dept_id"`
+	Name            string          `json:"name"`
+	ParentId        int64           `json:"parent_id"`
+	CreateDeptGroup bool            `json:"create_dept_group"`
+	AutoAddUser     bool            `json:"auto_add_user"`
+	Raw             json.RawMessage `json:"-"`
+}
+
+func (department *DingtalkDepartment) UnmarshalJSON(data []byte) error {
+	type dingtalkDepartmentAlias DingtalkDepartment
+	var decoded dingtalkDepartmentAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*department = DingtalkDepartment(decoded)
+	department.Raw = append(department.Raw[:0], data...)
+	return nil
 }
 
 type DingtalkDeptDetailResp struct {
@@ -417,6 +443,8 @@ func (p *DingtalkSyncerProvider) getDingtalkUserFieldValue(dingtalkUser *Dingtal
 		return dingtalkUser.Name
 	case "email":
 		return dingtalkUser.Email
+	case "org_email":
+		return dingtalkUser.OrgEmail
 	case "mobile":
 		return dingtalkUser.Mobile
 	case "avatar":
@@ -435,11 +463,47 @@ func (p *DingtalkSyncerProvider) getDingtalkUserFieldValue(dingtalkUser *Dingtal
 
 // dingtalkUserToOriginalUser converts DingTalk user to Casdoor OriginalUser
 func (p *DingtalkSyncerProvider) dingtalkUserToOriginalUser(dingtalkUser *DingtalkUser) *OriginalUser {
+	identity := dingtalkUser.UnionId
+	if identity == "" {
+		identity = dingtalkUser.UserId
+	}
+
+	stableId := dingtalkStableUserId(p.Syncer.Organization, identity)
+	departmentIds, _ := json.Marshal(dingtalkUser.Department)
+	rawUser := compactDingTalkJSON(dingtalkUser.Raw, dingtalkUser)
+	displayName := strings.TrimSpace(dingtalkUser.Name)
+	if displayName == "" {
+		displayName = identity
+	}
+
+	email := dingtalkUser.Email
+	if email == "" {
+		email = dingtalkUser.OrgEmail
+	}
+
 	user := &OriginalUser{
-		Address:    []string{},
-		Properties: map[string]string{},
-		Groups:     []string{},
-		DingTalk:   dingtalkUser.UserId, // Link DingTalk provider account
+		Id:          stableId,
+		Name:        dingtalkAccountName(displayName),
+		DisplayName: displayName,
+		Email:       email,
+		Phone:       dingtalkUser.Mobile,
+		Avatar:      dingtalkUser.Avatar,
+		Title:       dingtalkUser.Position,
+		IsForbidden: !dingtalkUser.Active,
+		Address:     []string{},
+		Groups:      []string{},
+		Properties: map[string]string{
+			"dingtalk_userid":         dingtalkUser.UserId,
+			"dingtalk_unionid":        dingtalkUser.UnionId,
+			"dingtalk_sub":            stableId,
+			"dingtalk_mobile":         dingtalkUser.Mobile,
+			"dingtalk_email":          dingtalkUser.Email,
+			"dingtalk_org_email":      dingtalkUser.OrgEmail,
+			"dingtalk_title":          dingtalkUser.Position,
+			"dingtalk_job_number":     dingtalkUser.JobNumber,
+			"dingtalk_department_ids": string(departmentIds),
+			"dingtalk_raw":            rawUser,
+		},
 	}
 
 	// Apply TableColumns mapping if configured
@@ -448,20 +512,19 @@ func (p *DingtalkSyncerProvider) dingtalkUserToOriginalUser(dingtalkUser *Dingta
 			value := p.getDingtalkUserFieldValue(dingtalkUser, tableColumn.Name)
 			p.Syncer.setUserByKeyValue(user, tableColumn.CasdoorName, value)
 		}
-	} else {
-		// Fallback to default mapping for backward compatibility
-		user.Id = dingtalkUser.UserId
-		user.Name = dingtalkUser.UserId
-		if dingtalkUser.UnionId != "" {
-			user.Name = dingtalkUser.UnionId
-		}
-		user.DisplayName = dingtalkUser.Name
-		user.Email = dingtalkUser.Email
-		user.Phone = dingtalkUser.Mobile
-		user.Avatar = dingtalkUser.Avatar
-		user.Title = dingtalkUser.Position
-		user.IsForbidden = !dingtalkUser.Active
 	}
+
+	// The account name and subject follow the former dingtalk-syncer contract,
+	// regardless of the generic table-column defaults (which map unionid to Name).
+	user.Id = stableId
+	user.Name = dingtalkAccountName(displayName)
+	user.DisplayName = displayName
+	user.Email = email
+	user.Phone = dingtalkUser.Mobile
+	user.Avatar = dingtalkUser.Avatar
+	user.Title = dingtalkUser.Position
+	user.IsForbidden = !dingtalkUser.Active
+	user.Properties["dingtalk_sub"] = stableId
 
 	// Add department IDs to Groups field
 	for _, deptId := range dingtalkUser.Department {
@@ -528,6 +591,11 @@ func (p *DingtalkSyncerProvider) dingtalkDepartmentToOriginalGroup(dept *Dingtal
 		parentId = getDingtalkGroupName(dept.ParentId)
 	}
 
+	parentProperty := parentId
+	if dept.DeptId == 1 || dept.ParentId == 0 {
+		parentProperty = ""
+	}
+
 	return &OriginalGroup{
 		Id:          p.getDingtalkGroupId(dept.DeptId),
 		Name:        deptIdStr,    // Use ID as name for uniqueness
@@ -537,7 +605,24 @@ func (p *DingtalkSyncerProvider) dingtalkDepartmentToOriginalGroup(dept *Dingtal
 		Manager:     "",           // DingTalk doesn't provide manager in dept details
 		Email:       "",           // DingTalk doesn't provide email for departments
 		ParentId:    parentId,
+		Properties: map[string]string{
+			"dingtalk_dept_id":        deptIdStr,
+			"dingtalk_parent_dept_id": parentProperty,
+			"dingtalk_raw":            compactDingTalkJSON(dept.Raw, dept),
+		},
 	}
+}
+
+func compactDingTalkJSON(raw json.RawMessage, fallback interface{}) string {
+	if len(raw) > 0 {
+		compact := &bytes.Buffer{}
+		if json.Compact(compact, raw) == nil {
+			return compact.String()
+		}
+	}
+
+	data, _ := json.Marshal(fallback)
+	return string(data)
 }
 
 // GetOriginalUserGroups retrieves the group (department) IDs that a user belongs to

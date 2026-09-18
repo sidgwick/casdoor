@@ -14,7 +14,10 @@
 
 package object
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestDingtalkDepartmentToOriginalGroupPreservesParent(t *testing.T) {
 	provider := &DingtalkSyncerProvider{Syncer: &Syncer{Organization: "rino"}}
@@ -35,5 +38,30 @@ func TestDingtalkDepartmentToOriginalGroupPreservesParent(t *testing.T) {
 	})
 	if child.ParentId != "3" {
 		t.Fatalf("child ParentId = %q, want %q", child.ParentId, "3")
+	}
+}
+
+func TestDingtalkDepartmentPreservesLegacyProperties(t *testing.T) {
+	provider := &DingtalkSyncerProvider{Syncer: &Syncer{Organization: "rino"}}
+	var department DingtalkDepartment
+	err := json.Unmarshal([]byte(`{"dept_id":12,"name":"Engineering","parent_id":3,"custom_field":"kept"}`), &department)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := provider.dingtalkDepartmentToOriginalGroup(&department)
+	if original.Properties["dingtalk_dept_id"] != "12" || original.Properties["dingtalk_parent_dept_id"] != "3" {
+		t.Fatalf("department identity properties missing: %#v", original.Properties)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(original.Properties["dingtalk_raw"]), &raw); err != nil {
+		t.Fatalf("invalid dingtalk_raw: %v", err)
+	}
+	if raw["custom_field"] != "kept" {
+		t.Fatalf("unknown DingTalk fields were not preserved in dingtalk_raw: %#v", raw)
+	}
+
+	group := (&Syncer{Organization: "rino"}).createGroupFromOriginalGroup(original)
+	if group.Properties["dingtalk_dept_id"] != "12" {
+		t.Fatalf("syncer dropped department properties: %#v", group.Properties)
 	}
 }

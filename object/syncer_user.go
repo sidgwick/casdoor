@@ -15,7 +15,9 @@
 package object
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -71,6 +73,9 @@ func (syncer *Syncer) updateUserForOriginalFields(user *User, key string) (bool,
 
 	columns := syncer.getCasdoorColumns()
 	columns = append(columns, "affiliation", "hash", "pre_hash")
+	if syncer.Type == "DingTalk" {
+		columns = append(columns, "groups", "properties")
+	}
 
 	// Skip password-related columns when the incoming user has no password data.
 	// API-based syncers (DingTalk, WeCom, Lark, etc.) do not provide passwords,
@@ -96,6 +101,13 @@ func (syncer *Syncer) updateUserForOriginalFields(user *User, key string) (bool,
 		columns = append(columns, "lark")
 	}
 
+	if syncer.Type == "DingTalk" {
+		_, err = userEnforcer.UpdateGroupsForUser(user.GetId(), user.Groups)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	affected, err := ormer.Engine.Where(key+" = ? and owner = ?", syncer.getUserValue(&oldUser, key), oldUser.Owner).Cols(columns...).Update(user)
 	if err != nil {
 		return false, err
@@ -111,6 +123,13 @@ func (syncer *Syncer) calculateHash(user *OriginalUser) string {
 		if tableColumn.IsHashed {
 			values = append(values, m[tableColumn.Name])
 		}
+	}
+
+	if syncer.Type == "DingTalk" {
+		groups := append([]string(nil), user.Groups...)
+		sort.Strings(groups)
+		properties, _ := json.Marshal(user.Properties)
+		values = append(values, strings.Join(groups, "|"), string(properties), user.DingTalk)
 	}
 
 	s := strings.Join(values, "|")

@@ -24,7 +24,8 @@ type OriginalGroup struct {
 	Manager     string
 	Email       string
 	// ParentId is the Name of the parent group, empty for a top group
-	ParentId string
+	ParentId   string
+	Properties map[string]string
 }
 
 // SyncerProvider defines the interface that all syncer implementations must satisfy.

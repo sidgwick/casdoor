@@ -54,6 +54,55 @@ func GetUserByField(organizationName string, field string, value string) (*User,
 	}
 }
 
+// GetUserByDingTalkUnionId finds the account already provisioned by the
+// DingTalk syncer before falling back to generic email/phone/name binding.
+func GetUserByDingTalkUnionId(organizationName string, unionId string) (*User, error) {
+	if unionId == "" {
+		return nil, nil
+	}
+
+	users := []*User{}
+	err := ormer.Engine.Where("owner = ? AND (properties LIKE ? OR properties LIKE ?)", organizationName, "%dingtalk_unionid%", "%oauth_DingTalk_unionId%").Find(&users)
+	if err != nil {
+		return nil, err
+	}
+	legacyNameUser, err := GetUserByField(organizationName, "name", unionId)
+	if err != nil {
+		return nil, err
+	}
+	if legacyNameUser != nil {
+		users = append(users, legacyNameUser)
+	}
+	return findUserByDingTalkUnionId(users, unionId)
+}
+
+func findUserByDingTalkUnionId(users []*User, unionId string) (*User, error) {
+	var matched *User
+	for _, user := range users {
+		storedUnionIds := dingtalkPropertyValues(user, "dingtalk_unionid", "oauth_DingTalk_unionId")
+		if len(storedUnionIds) == 0 && user.Name == unionId {
+			storedUnionIds = append(storedUnionIds, user.Name)
+		}
+		if !containsDingTalkString(storedUnionIds, unionId) {
+			continue
+		}
+		if matched != nil && matched.GetId() != user.GetId() {
+			return nil, fmt.Errorf("DingTalk unionId %q is linked to multiple Casdoor accounts: %s and %s", unionId, matched.GetId(), user.GetId())
+		}
+		matched = user
+	}
+	return matched, nil
+}
+
+func containsDingTalkString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func HasUserByField(organizationName string, field string, value string) bool {
 	user, err := GetUserByField(organizationName, field, value)
 	if err != nil {

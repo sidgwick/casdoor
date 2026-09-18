@@ -16,6 +16,7 @@ package object
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/casdoor/casdoor/util"
 )
@@ -36,6 +37,7 @@ func (syncer *Syncer) createGroupFromOriginalGroup(originalGroup *OriginalGroup)
 		Manager:     originalGroup.Manager,
 		IsEnabled:   true,
 		ParentId:    originalGroup.ParentId,
+		Properties:  originalGroup.Properties,
 		IsTopGroup:  originalGroup.ParentId == "",
 	}
 
@@ -86,10 +88,11 @@ func (syncer *Syncer) syncGroups() error {
 			newGroup := syncer.createGroupFromOriginalGroup(oGroup)
 
 			// Update group display name and other fields if they've changed
-			if existingGroup.DisplayName != newGroup.DisplayName || existingGroup.ParentId != newGroup.ParentId {
+			if existingGroup.DisplayName != newGroup.DisplayName || existingGroup.ParentId != newGroup.ParentId || !maps.Equal(existingGroup.Properties, newGroup.Properties) {
 				existingGroup.DisplayName = newGroup.DisplayName
 				existingGroup.ParentId = newGroup.ParentId
 				existingGroup.IsTopGroup = newGroup.IsTopGroup
+				existingGroup.Properties = newGroup.Properties
 				existingGroup.UpdatedTime = util.GetCurrentTime()
 				_, err = UpdateGroup(existingGroup.GetId(), existingGroup, true, "")
 				if err != nil {

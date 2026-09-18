@@ -60,6 +60,7 @@ require (
 	github.com/microsoft/go-mssqldb v1.9.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/modelcontextprotocol/go-sdk v1.4.0
+	github.com/mozillazg/go-pinyin v0.20.0
 	github.com/nyaruka/phonenumbers v1.2.2
 	github.com/polarsource/polar-go v0.12.0
 	github.com/pquerna/otp v1.4.0

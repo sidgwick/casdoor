@@ -35,6 +35,13 @@ func (syncer *Syncer) syncUsers() error {
 		return err
 	}
 
+	if syncer.Type == "DingTalk" {
+		oUsers, err = syncer.prepareDingTalkUsers(users, oUsers)
+		if err != nil {
+			return err
+		}
+	}
+
 	fmt.Printf("Users: %d, oUsers: %d\n", len(users), len(oUsers))
 
 	var affiliationMap map[int]string

@@ -503,12 +503,19 @@ func checkMfaEnable(c *ApiController, user *object.User, organization *object.Or
 	return false
 }
 
-func getExistUserByBindingRule(providerItem *object.ProviderItem, application *object.Application, userInfo *idp.UserInfo) (user *object.User, err error) {
+func getExistUserByBindingRule(providerItem *object.ProviderItem, application *object.Application, userInfo *idp.UserInfo, providerType string) (user *object.User, err error) {
 	if providerItem.BindingRule == nil {
 		providerItem.BindingRule = &[]string{"Email", "Phone", "Name"}
 	}
 	if len(*providerItem.BindingRule) == 0 {
 		return nil, nil
+	}
+
+	if providerType == "DingTalk" && userInfo.UnionId != "" {
+		user, err = object.GetUserByDingTalkUnionId(application.Organization, userInfo.UnionId)
+		if err != nil || user != nil {
+			return user, err
+		}
 	}
 
 	for _, rule := range *providerItem.BindingRule {
@@ -1024,7 +1031,7 @@ func (c *ApiController) Login() {
 				c.Ctx.Input.SetParam("recordUserId", user.GetId())
 			} else if provider.Category == "OAuth" || provider.Category == "Web3" || provider.Category == "SAML" {
 				// Sign up via OAuth
-				user, err = getExistUserByBindingRule(providerItem, application, userInfo)
+				user, err = getExistUserByBindingRule(providerItem, application, userInfo, provider.Type)
 				if err != nil {
 					c.ResponseError(err.Error())
 					return
