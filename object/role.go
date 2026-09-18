@@ -239,9 +239,32 @@ func getRolesByUserInternal(userId string) ([]*Role, map[string][]string, error)
 		return nil, nil, fmt.Errorf("The user: %s doesn't exist", userId)
 	}
 
+	groupsByOwner := map[string][]*Group{}
+	effectiveGroups := map[string]struct{}{}
+	for _, groupID := range user.Groups {
+		groupOwner, _, err := util.GetOwnerAndNameFromIdWithError(groupID)
+		if err != nil {
+			effectiveGroups[groupID] = struct{}{}
+			continue
+		}
+
+		groups, ok := groupsByOwner[groupOwner]
+		if !ok {
+			groups, err = GetGroups(groupOwner)
+			if err != nil {
+				return nil, nil, err
+			}
+			groupsByOwner[groupOwner] = groups
+		}
+
+		for _, effectiveGroupID := range getGroupAndAncestorIDs(groups, groupID) {
+			effectiveGroups[effectiveGroupID] = struct{}{}
+		}
+	}
+
 	query := ormer.Engine.Alias("r").Where("r.users like ?", fmt.Sprintf("%%%s%%", userId))
-	for _, group := range user.Groups {
-		query = query.Or("r.groups like ?", fmt.Sprintf("%%%s%%", group))
+	for groupID := range effectiveGroups {
+		query = query.Or("r.groups like ?", fmt.Sprintf("%%%s%%", groupID))
 	}
 
 	roles := []*Role{}
@@ -259,7 +282,7 @@ func getRolesByUserInternal(userId string) ([]*Role, map[string][]string, error)
 			roleSources = append(roleSources, "")
 		}
 		for _, group := range role.Groups {
-			if util.InSlice(user.Groups, group) {
+			if _, ok := effectiveGroups[group]; ok {
 				roleSources = append(roleSources, group)
 			}
 		}

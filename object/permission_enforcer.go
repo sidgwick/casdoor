@@ -16,6 +16,7 @@ package object
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/casbin/casbin/v2"
@@ -295,6 +296,7 @@ func (r *permissionGroupResolver) getUsersInGroup(permissionOwner string, groupI
 		for user := range usersByID {
 			users = append(users, user)
 		}
+		sort.Strings(users)
 		r.usersByGroup[groupId] = users
 		return users, nil
 	}
@@ -303,10 +305,28 @@ func (r *permissionGroupResolver) getUsersInGroup(permissionOwner string, groupI
 		return []string{}, nil
 	}
 
-	users, err := userEnforcer.GetAllUsersByGroup(groupId)
+	groups, err := r.getGroups(groupOwner)
 	if err != nil {
 		return nil, err
 	}
+
+	usersByID := map[string]struct{}{}
+	for _, descendantID := range getGroupDescendantIDs(groups, groupId) {
+		groupUsers, err := userEnforcer.GetAllUsersByGroup(descendantID)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, user := range groupUsers {
+			usersByID[user] = struct{}{}
+		}
+	}
+
+	users := make([]string, 0, len(usersByID))
+	for user := range usersByID {
+		users = append(users, user)
+	}
+	sort.Strings(users)
 
 	r.usersByGroup[groupId] = users
 	return users, nil
