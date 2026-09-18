@@ -140,6 +140,9 @@ func UpdateModel(id string, modelObj *Model) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, err
 }
@@ -159,6 +162,9 @@ func AddModel(model *Model) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -167,6 +173,9 @@ func DeleteModel(model *Model) (bool, error) {
 	affected, err := ormer.Engine.ID(core.PK{model.Owner, model.Name}).Delete(&Model{})
 	if err != nil {
 		return false, err
+	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
 	}
 
 	return affected != 0, nil

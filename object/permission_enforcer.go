@@ -549,6 +549,8 @@ type permissionPolicyDiff struct {
 // single role to a permission that already holds thousands of them no longer deletes and re-inserts
 // every policy row of that permission.
 func updatePermissionsPolicies(oldPermissions []*Permission, newPermissions []*Permission) error {
+	defer InvalidatePermissionEnforcerCache()
+
 	if len(oldPermissions) != len(newPermissions) {
 		return fmt.Errorf("updatePermissionsPolicies: the old permission count: %d doesn't match the new permission count: %d", len(oldPermissions), len(newPermissions))
 	}
@@ -622,6 +624,8 @@ func updatePermissionsPolicies(oldPermissions []*Permission, newPermissions []*P
 }
 
 func addPolicies(permission *Permission) error {
+	defer InvalidatePermissionEnforcerCache()
+
 	enforcer, err := getPermissionEnforcer(permission)
 	if err != nil {
 		return err
@@ -634,6 +638,8 @@ func addPolicies(permission *Permission) error {
 }
 
 func removePolicies(permission *Permission) error {
+	defer InvalidatePermissionEnforcerCache()
+
 	enforcer, err := getPermissionEnforcer(permission)
 	if err != nil {
 		return err
@@ -653,6 +659,7 @@ func applyPermissionsPolicies(permissions []*Permission, add bool) error {
 	if len(permissions) == 0 {
 		return nil
 	}
+	defer InvalidatePermissionEnforcerCache()
 
 	groups := map[string][]*Permission{}
 	order := []string{}
@@ -704,7 +711,7 @@ func removePermissionsPolicies(permissions []*Permission) error {
 }
 
 func Enforce(permission *Permission, request []interface{}, permissionIds ...string) (bool, error) {
-	enforcer, err := getPermissionEnforcer(permission, permissionIds...)
+	enforcer, err := getCachedPermissionEnforcer(permission, permissionIds...)
 	if err != nil {
 		return false, err
 	}
@@ -717,7 +724,7 @@ func Enforce(permission *Permission, request []interface{}, permissionIds ...str
 }
 
 func BatchEnforce(permission *Permission, requests [][]interface{}, permissionIds ...string) ([]bool, error) {
-	enforcer, err := getPermissionEnforcer(permission, permissionIds...)
+	enforcer, err := getCachedPermissionEnforcer(permission, permissionIds...)
 	if err != nil {
 		return nil, err
 	}
@@ -728,7 +735,7 @@ func BatchEnforce(permission *Permission, requests [][]interface{}, permissionId
 	return enforcer.BatchEnforce(interfaceRequests)
 }
 
-func getEnforcers(userId string) ([]*casbin.Enforcer, error) {
+func getEnforcers(userId string) ([]*casbin.SyncedEnforcer, error) {
 	permissions, _, err := getPermissionsAndRolesByUser(userId)
 	if err != nil {
 		return nil, err
@@ -749,10 +756,10 @@ func getEnforcers(userId string) ([]*casbin.Enforcer, error) {
 		permissions = append(permissions, permissionsByRole...)
 	}
 
-	var enforcers []*casbin.Enforcer
+	var enforcers []*casbin.SyncedEnforcer
 	for _, permission := range permissions {
-		var enforcer *casbin.Enforcer
-		enforcer, err = getPermissionEnforcer(permission)
+		var enforcer *casbin.SyncedEnforcer
+		enforcer, err = getCachedPermissionEnforcer(permission)
 		if err != nil {
 			return nil, err
 		}

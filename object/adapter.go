@@ -120,6 +120,9 @@ func UpdateAdapter(id string, adapter *Adapter) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -129,6 +132,9 @@ func AddAdapter(adapter *Adapter) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -137,6 +143,9 @@ func DeleteAdapter(adapter *Adapter) (bool, error) {
 	affected, err := ormer.Engine.ID(core.PK{adapter.Owner, adapter.Name}).Delete(&Adapter{})
 	if err != nil {
 		return false, err
+	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
 	}
 
 	return affected != 0, nil

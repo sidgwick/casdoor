@@ -182,6 +182,7 @@ func UpdatePermission(id string, permission *Permission) (bool, error) {
 	}
 
 	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
 		// if oldPermission.Adapter != "" && oldPermission.Adapter != permission.Adapter {
 		// 	isEmpty, _ := ormer.Engine.IsTableEmpty(oldPermission.Adapter)
 		// 	if isEmpty {
@@ -238,6 +239,7 @@ func UpdatePermissions(permissions []*Permission) (bool, error) {
 		}
 
 		if affected != 0 {
+			InvalidatePermissionEnforcerCache()
 			oldPermissions = append(oldPermissions, oldPermission)
 			newPermissions = append(newPermissions, permission)
 		}
@@ -279,6 +281,7 @@ func AddPermission(permission *Permission) (bool, error) {
 	}
 
 	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
 		err = addPolicies(permission)
 		if err != nil {
 			return false, err
@@ -298,6 +301,9 @@ func AddPermissions(permissions []*Permission) (bool, error) {
 		if !strings.Contains(err.Error(), "Duplicate entry") {
 			return false, err
 		}
+	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
 	}
 
 	for _, permission := range permissions {
@@ -348,6 +354,9 @@ func deletePermission(permission *Permission) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -359,6 +368,7 @@ func DeletePermission(permission *Permission) (bool, error) {
 	}
 
 	if affected {
+		InvalidatePermissionEnforcerCache()
 		err = removePolicies(permission)
 		if err != nil {
 			return false, err

@@ -134,6 +134,9 @@ func UpdateRole(id string, role *Role, isGlobalAdmin bool, lang string) (bool, e
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	if renameRole && affected != 0 {
 		permissions, err := GetPermissionsByRole(role.GetId())
@@ -157,6 +160,9 @@ func AddRole(role *Role) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -170,6 +176,9 @@ func AddRoles(roles []*Role) bool {
 		if !strings.Contains(err.Error(), "Duplicate entry") {
 			panic(err)
 		}
+	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
 	}
 	return affected != 0
 }
@@ -223,7 +232,11 @@ func DeleteRole(role *Role) (bool, error) {
 		}
 	}
 
-	return deleteRole(role)
+	affected, err := deleteRole(role)
+	if err == nil && affected {
+		InvalidatePermissionEnforcerCache()
+	}
+	return affected, err
 }
 
 func (role *Role) GetId() string {

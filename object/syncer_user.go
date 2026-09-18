@@ -112,6 +112,9 @@ func (syncer *Syncer) updateUserForOriginalFields(user *User, key string) (bool,
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 && userColumnsAffectPermissionEnforcer(columns) {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }

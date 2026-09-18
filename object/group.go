@@ -201,6 +201,9 @@ func UpdateGroup(id string, group *Group, isGlobalAdmin bool, lang string) (bool
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -215,6 +218,9 @@ func AddGroup(group *Group) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -226,6 +232,9 @@ func AddGroups(groups []*Group) (bool, error) {
 	affected, err := ormer.Engine.Insert(groups)
 	if err != nil {
 		return false, err
+	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
 	}
 	return affected != 0, nil
 }
@@ -261,6 +270,7 @@ func AddGroupsInBatch(groups []*Group) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	InvalidatePermissionEnforcerCache()
 
 	return true, nil
 }
@@ -292,7 +302,11 @@ func DeleteGroup(group *Group) (bool, error) {
 		return false, errors.New("group has users")
 	}
 
-	return deleteGroup(group)
+	affected, err := deleteGroup(group)
+	if err == nil && affected {
+		InvalidatePermissionEnforcerCache()
+	}
+	return affected, err
 }
 
 func checkGroupName(name string) error {

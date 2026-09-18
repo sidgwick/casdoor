@@ -294,6 +294,9 @@ func UpdateOrganization(id string, organization *Organization, isGlobalAdmin boo
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -316,6 +319,9 @@ func AddOrganization(organization *Organization) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	if affected != 0 {
+		InvalidatePermissionEnforcerCache()
+	}
 
 	return affected != 0, nil
 }
@@ -334,7 +340,11 @@ func DeleteOrganization(organization *Organization) (bool, error) {
 		return false, nil
 	}
 
-	return deleteOrganization(organization)
+	affected, err := deleteOrganization(organization)
+	if err == nil && affected {
+		InvalidatePermissionEnforcerCache()
+	}
+	return affected, err
 }
 
 func GetOrganizationByUser(user *User) (*Organization, error) {

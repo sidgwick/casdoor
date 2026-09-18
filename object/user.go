@@ -927,7 +927,14 @@ func updateUser(id string, user *User, columns []string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	if affected != 0 && userColumnsAffectPermissionEnforcer(columns) {
+		InvalidatePermissionEnforcerCache()
+	}
 	return affected, nil
+}
+
+func userColumnsAffectPermissionEnforcer(columns []string) bool {
+	return len(columns) == 0 || util.InSlice(columns, "owner") || util.InSlice(columns, "name") || util.InSlice(columns, "groups")
 }
 
 func UpdateUserForAllFields(id string, user *User) (bool, error) {
@@ -976,6 +983,9 @@ func UpdateUserForAllFields(id string, user *User) (bool, error) {
 	affected, err := ormer.Engine.ID(core.PK{owner, name}).AllCols().Update(user)
 	if err != nil {
 		return false, err
+	}
+	if affected != 0 && (oldUser.Owner != user.Owner || oldUser.Name != user.Name) {
+		InvalidatePermissionEnforcerCache()
 	}
 
 	if affected != 0 && isUserAccessRevoked(oldUser, user, nil) {
@@ -1105,7 +1115,6 @@ func AddUser(user *User, lang string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
 	return affected != 0, nil
 }
 
@@ -1160,7 +1169,6 @@ func AddUsers(users []*User) (bool, error) {
 			return false, err
 		}
 	}
-
 	return affected != 0, nil
 }
 

@@ -67,9 +67,12 @@ func ExpirePermissions() error {
 		}
 
 		permission.IsEnabled = false
-		_, err = ormer.Engine.ID(core.PK{permission.Owner, permission.Name}).Cols("is_enabled").Update(permission)
+		affected, err := ormer.Engine.ID(core.PK{permission.Owner, permission.Name}).Cols("is_enabled").Update(permission)
 		if err != nil {
 			return fmt.Errorf("failed to disable expired permission %s: %w", permission.GetId(), err)
+		}
+		if affected != 0 {
+			InvalidatePermissionEnforcerCache()
 		}
 
 		fmt.Printf("[%d] Revoked expired permission: %s | ExpireTime: %s\n", revokedCount, permission.GetId(), permission.ExpireTime)
