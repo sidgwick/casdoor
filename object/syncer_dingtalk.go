@@ -476,14 +476,15 @@ func (p *DingtalkSyncerProvider) dingtalkUserToOriginalUser(dingtalkUser *Dingta
 		displayName = identity
 	}
 
-	email := dingtalkUser.Email
+	email := strings.TrimSpace(dingtalkUser.Email)
 	if email == "" {
-		email = dingtalkUser.OrgEmail
+		email = strings.TrimSpace(dingtalkUser.OrgEmail)
 	}
+	accountName := dingtalkPreferredAccountName(email, displayName)
 
 	user := &OriginalUser{
 		Id:          stableId,
-		Name:        dingtalkAccountName(displayName),
+		Name:        accountName,
 		DisplayName: displayName,
 		Email:       email,
 		Phone:       dingtalkUser.Mobile,
@@ -514,10 +515,10 @@ func (p *DingtalkSyncerProvider) dingtalkUserToOriginalUser(dingtalkUser *Dingta
 		}
 	}
 
-	// The account name and subject follow the former dingtalk-syncer contract,
-	// regardless of the generic table-column defaults (which map unionid to Name).
+	// Keep the DingTalk account name and subject independent of generic table-column
+	// defaults (which may map unionid to Name).
 	user.Id = stableId
-	user.Name = dingtalkAccountName(displayName)
+	user.Name = accountName
 	user.DisplayName = displayName
 	user.Email = email
 	user.Phone = dingtalkUser.Mobile

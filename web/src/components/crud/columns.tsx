@@ -131,8 +131,9 @@ export function refsColumn<T>(options: {
   sortable?: boolean;
   searchable?: boolean;
   max?: number;
+  getLabel?: (id: string, item: any) => string | undefined;
 }): ColumnDef<T> {
-  const {dataIndex, title, urlPrefix, width, sortable = false, searchable = false, max = 6} = options;
+  const {dataIndex, title, urlPrefix, width, sortable = false, searchable = false, max = 6, getLabel} = options;
   return {
     dataIndex,
     title,
@@ -148,10 +149,10 @@ export function refsColumn<T>(options: {
         <div className="flex flex-wrap gap-1">
           {items.map((item: any) => {
             const id = typeof item === "string" ? item : `${item.owner}/${item.name}`;
-            const label = typeof item === "string" ? Setting.getShortName(item) : item.name;
+            const label = getLabel?.(id, item) ?? (typeof item === "string" ? Setting.getShortName(item) : item.name);
             return (
               <Badge key={id} variant="secondary" className="font-normal">
-                <Link to={`${urlPrefix}/${id}`} className="underline-offset-2 hover:underline">
+                <Link to={`${urlPrefix}/${id}`} title={id} className="underline-offset-2 hover:underline">
                   {label}
                 </Link>
               </Badge>

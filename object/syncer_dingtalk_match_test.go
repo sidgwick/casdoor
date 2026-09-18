@@ -22,7 +22,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestDingtalkUserConversionUsesLegacyNameAndPersistsSourceProperties(t *testing.T) {
+func TestDingtalkUserConversionPrefersEmailForNameAndPersistsSourceProperties(t *testing.T) {
 	provider := &DingtalkSyncerProvider{Syncer: &Syncer{
 		Organization: "rino",
 		TableColumns: []*TableColumn{{Name: "unionid", CasdoorName: "Name"}},
@@ -34,7 +34,7 @@ func TestDingtalkUserConversionUsesLegacyNameAndPersistsSourceProperties(t *test
 		Department: []int64{1, 12},
 		Position:   "Engineer",
 		Mobile:     "13800000001",
-		Email:      "",
+		Email:      "alice@example.com",
 		OrgEmail:   "zhangsan@example.com",
 		JobNumber:  "A-1001",
 		Active:     true,
@@ -45,10 +45,10 @@ func TestDingtalkUserConversionUsesLegacyNameAndPersistsSourceProperties(t *test
 	if user.Id != wantID {
 		t.Fatalf("Id = %q, want stable UUID %q", user.Id, wantID)
 	}
-	if user.Name != "zhangsan" {
-		t.Fatalf("Name = %q, want pinyin username", user.Name)
+	if user.Name != "alice" {
+		t.Fatalf("Name = %q, want the prefix of the primary email", user.Name)
 	}
-	if user.DisplayName != "张三" || user.Email != "zhangsan@example.com" {
+	if user.DisplayName != "张三" || user.Email != "alice@example.com" {
 		t.Fatalf("unexpected display/email mapping: %#v / %q", user.DisplayName, user.Email)
 	}
 	if user.DingTalk != "" {
@@ -66,6 +66,32 @@ func TestDingtalkUserConversionUsesLegacyNameAndPersistsSourceProperties(t *test
 	}
 	if raw.JobNumber != source.JobNumber || raw.OrgEmail != source.OrgEmail {
 		t.Fatalf("dingtalk_raw did not preserve source details: %#v", raw)
+	}
+}
+
+func TestDingtalkUserConversionFallsBackToPinyinNameWithoutEmail(t *testing.T) {
+	provider := &DingtalkSyncerProvider{Syncer: &Syncer{Organization: "rino"}}
+	source := &DingtalkUser{UserId: "userid-1", Name: "张三", Active: true}
+
+	user := provider.dingtalkUserToOriginalUser(source)
+	if user.Name != "zhangsan" {
+		t.Fatalf("Name = %q, want current pinyin fallback", user.Name)
+	}
+}
+
+func TestPrepareDingtalkUsersPrefersEmailForNewAccountName(t *testing.T) {
+	syncer := &Syncer{Organization: "rino", Type: "DingTalk"}
+	source := &User{
+		Id: "generated-id", DisplayName: "张三", Email: "first.last+ota@example.com",
+		Properties: map[string]string{"dingtalk_userid": "userid-1", "dingtalk_unionid": "unionid-1"},
+	}
+
+	prepared, err := syncer.prepareDingTalkUsers(nil, []*User{source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prepared) != 1 || prepared[0].Name != "first.last-ota" {
+		t.Fatalf("new user's account name did not prefer email: %#v", prepared)
 	}
 }
 

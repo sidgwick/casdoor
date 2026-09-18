@@ -26,6 +26,9 @@ import (
 
 var dingtalkInvalidNameChars = regexp.MustCompile(`[^A-Za-z0-9]+`)
 var dingtalkNonPhoneChars = regexp.MustCompile(`[^0-9]`)
+var dingtalkValidAccountName = regexp.MustCompile(`^[A-Za-z0-9]+(?:[-._][A-Za-z0-9]+)*$`)
+var dingtalkInvalidAccountNameChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
+var dingtalkRepeatedAccountNameSeparators = regexp.MustCompile(`[-._]{2,}`)
 
 type dingtalkUserIndexes struct {
 	byUnionId map[string][]*User
@@ -48,6 +51,24 @@ func dingtalkAccountName(displayName string) string {
 		return "user"
 	}
 	return name
+}
+
+func dingtalkPreferredAccountName(email string, displayName string) string {
+	if email = strings.TrimSpace(email); email != "" {
+		if prefix, _, ok := strings.Cut(email, "@"); ok {
+			if prefix != "" {
+				prefix = strings.ToLower(strings.TrimSpace(prefix))
+				prefix = dingtalkInvalidAccountNameChars.ReplaceAllString(prefix, "-")
+				prefix = dingtalkRepeatedAccountNameSeparators.ReplaceAllString(prefix, "-")
+				prefix = strings.Trim(prefix, "-._")
+				if dingtalkValidAccountName.MatchString(prefix) {
+					return prefix
+				}
+				return dingtalkAccountName(prefix)
+			}
+		}
+	}
+	return dingtalkAccountName(displayName)
 }
 
 func normalizeDingTalkPhone(value string) string {
@@ -247,7 +268,7 @@ func (syncer *Syncer) prepareDingTalkUsers(existingUsers []*User, sourceUsers []
 			source.Properties = mergeDingTalkProperties(matched.Properties, source.Properties)
 			source.Properties["dingtalk_sub"] = source.Id
 		} else {
-			base := dingtalkAccountName(source.DisplayName)
+			base := dingtalkPreferredAccountName(source.Email, source.DisplayName)
 			source.Name = uniqueDingTalkAccountName(base, source.Phone, userId, occupiedNames)
 		}
 

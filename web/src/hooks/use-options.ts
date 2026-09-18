@@ -72,13 +72,17 @@ export function useOrganizationOptions(): SearchableOption[] {
   return React.useMemo(() => toNameOptions(items), [items]);
 }
 
+export function useUserList(organizationName: string): any[] {
+  return useList(() => (organizationName ? UserBackend.getUsers(organizationName, 1, PAGE_SIZE) : null), [organizationName]);
+}
+
 export function useUserOptions(organizationName: string): SearchableOption[] {
-  const items = useList(() => (organizationName ? UserBackend.getUsers(organizationName, 1, PAGE_SIZE) : null), [organizationName]);
+  const items = useUserList(organizationName);
   return React.useMemo(() => toIdOptions(items), [items]);
 }
 
 export function useUserNameOptions(organizationName: string): SearchableOption[] {
-  const items = useList(() => (organizationName ? UserBackend.getUsers(organizationName, 1, PAGE_SIZE) : null), [organizationName]);
+  const items = useUserList(organizationName);
   return React.useMemo(() => toNameOptions(items), [items]);
 }
 
@@ -118,12 +122,16 @@ export function dropExtraPhysicalGroups(values: string[], groups: any[]): string
 }
 
 export function useRoleOptions(organizationName: string, exclude?: string): SearchableOption[] {
-  const items = useList(() => (organizationName ? RoleBackend.getRoles(organizationName, 1, PAGE_SIZE) : null), [organizationName]);
+  const items = useRoleList(organizationName);
   return React.useMemo(() => toIdOptions(items).filter((option) => option.value !== exclude), [items, exclude]);
 }
 
+export function useRoleList(organizationName: string): any[] {
+  return useList(() => (organizationName ? RoleBackend.getRoles(organizationName, 1, PAGE_SIZE) : null), [organizationName]);
+}
+
 export function useRoleNameOptions(organizationName: string): SearchableOption[] {
-  const items = useList(() => (organizationName ? RoleBackend.getRoles(organizationName, 1, PAGE_SIZE) : null), [organizationName]);
+  const items = useRoleList(organizationName);
   return React.useMemo(() => toNameOptions(items), [items]);
 }
 
