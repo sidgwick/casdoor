@@ -523,6 +523,10 @@ func (p *DingtalkSyncerProvider) getDingtalkGroupId(deptId int64) string {
 // dingtalkDepartmentToOriginalGroup converts DingTalk department to Casdoor OriginalGroup
 func (p *DingtalkSyncerProvider) dingtalkDepartmentToOriginalGroup(dept *DingtalkDepartment) *OriginalGroup {
 	deptIdStr := getDingtalkGroupName(dept.DeptId)
+	parentId := ""
+	if dept.DeptId != 1 && dept.ParentId > 0 {
+		parentId = getDingtalkGroupName(dept.ParentId)
+	}
 
 	return &OriginalGroup{
 		Id:          p.getDingtalkGroupId(dept.DeptId),
@@ -532,6 +536,7 @@ func (p *DingtalkSyncerProvider) dingtalkDepartmentToOriginalGroup(dept *Dingtal
 		Type:        "department", // Mark as department type
 		Manager:     "",           // DingTalk doesn't provide manager in dept details
 		Email:       "",           // DingTalk doesn't provide email for departments
+		ParentId:    parentId,
 	}
 }
 
